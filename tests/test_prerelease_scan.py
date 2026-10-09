@@ -56,7 +56,7 @@ class ScannerCatchesThings(unittest.TestCase):
             self.assertEqual(r.returncode, 1, r.stdout)
             self.assertIn("HIT [term:2]", r.stdout)
             with open(tf, "w", encoding="utf-8") as f:
-                f.write("# nothing that occurs here\nzzquuxzz\n")
+                f.write("# nothing that occurs here\n" + "zzquux" + "zz\n")
             r = run_scan("--terms", tf, "--history", "--authors")
             self.assertEqual(r.returncode, 0, r.stdout)
 

@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 BUILTIN = {
-    "absolute user-home path": r"[A-Za-z]:[\/]+Users[\/]|[/]Users[/]|[/]home[/][a-z]",
+    "absolute user-home path": r"[A-Za-z]:[\\/]+Users[\\/]|[/]Users[/]|[/]home[/][a-z]",
     "credential-like": r"(password|passwd|secret|api[_-]?key|access[_-]?token)\s*[:=]|BEGIN [A-Z ]*PRIVATE KEY|sk-[A-Za-z0-9]{20,}",
     "e-mail address": r"[\w.+-]+@(?![\w.-]*\.invalid\b)[\w-]+\.[\w.-]+",
 }
