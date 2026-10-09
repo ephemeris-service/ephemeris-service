@@ -1,0 +1,14 @@
+[project]
+name = "ephemeris-service"
+version = "0.1.0"
+description = "Local HTTP service returning Swiss Ephemeris astronomical numbers. No domain concepts."
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-only" }
+dependencies = ["pyswisseph==2.10.3.2"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["ephemeris_service"]

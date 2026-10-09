@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.se1 binary
+LICENSE -text
+ephe/SWISSEPH_LICENSE -text
