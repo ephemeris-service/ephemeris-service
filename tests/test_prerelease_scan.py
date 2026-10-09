@@ -57,8 +57,18 @@ class ScannerCatchesThings(unittest.TestCase):
             self.assertIn("HIT [term:2]", r.stdout)
             with open(tf, "w", encoding="utf-8") as f:
                 f.write("# nothing that occurs here\n" + "zzquux" + "zz\n")
-            r = run_scan("--terms", tf, "--history", "--authors")
+            r = run_scan("--terms", tf)
             self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_history_option_scans_history_and_prints_authors(self):
+        with tempfile.TemporaryDirectory() as d:
+            tf = os.path.join(d, "terms.txt")
+            with open(tf, "w", encoding="utf-8") as f:
+                f.write("Initial commit\n")
+            r = run_scan("--terms", tf, "--history", "--authors")
+            self.assertIn("authors/committers in history:", r.stdout)
+            self.assertIn("HIT [term:1] commit-message:", r.stdout)
+            self.assertEqual(r.returncode, 1, r.stdout)
 
 
 if __name__ == "__main__":
