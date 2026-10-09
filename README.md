@@ -14,7 +14,7 @@ The service runs in its own virtual environment inside this repository (`.venv/`
 `pyswisseph` as the only package installed:
 
     python -m venv .venv
-    .venv/bin/python -m pip install pyswisseph==2.10.3.2         # Windows: .venv\Scripts\python
+    .venv/bin/python -m pip install -r requirements.txt          # pins pyswisseph==2.10.3.2; Windows: .venv\Scripts\python
     .venv/bin/python -m ephemeris_service --port 8765            # binds 127.0.0.1 by default
 
 Callers that start the service for someone else (test fixtures, launch scripts) should use this
@@ -64,7 +64,7 @@ no instants, no coordinates, no client address. Unknown request fields are rejec
 
     python -m unittest discover -s . -t .
     python tools/bench.py            # batch latency against a resident service
-    python tools/prerelease_scan.py  # pre-release content scan
+    python tools/prerelease_scan.py --terms FILE --history   # pre-release scan; the term list is supplied by the releaser
 
 ## Source offer
 
