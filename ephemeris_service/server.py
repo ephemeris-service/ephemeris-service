@@ -12,7 +12,12 @@ Privacy rules (nothing here knows why a number is asked for):
   * request bodies and results are never stored;
   * the access log records method, route and status only: no body, no times,
     no coordinates, no client address; a path that is not one of the routes above
-    (and any query string) is never logged, it appears as the fixed marker <unknown>.
+    (and any query string) is never logged, it appears as the fixed marker <unknown>,
+    and a method other than GET and POST as <method>; the request line itself is
+    never logged;
+  * only GET and POST are served, any other method gets a fixed 405; a malformed
+    request line or protocol version gets a fixed 400; every error reply carries
+    fixed text only (status phrase and body), nothing taken from the request line.
 """
 
 import json
@@ -26,6 +31,10 @@ MAX_BODY_BYTES = 16 * 1024 * 1024
 KNOWN_ROUTES = {("GET", "/health"), ("GET", "/version"),
                 ("POST", "/v1/compute"), ("POST", "/v1/julday"), ("POST", "/v1/revjul")}
 UNKNOWN_ROUTE = "<unknown>"
+UNKNOWN_METHOD = "<method>"
+ERROR_PHRASES = {400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 414: "URI Too Long",
+                 431: "Request Header Fields Too Large", 500: "Internal Server Error"}
+ERROR_BODY = b'{"error":"INVALID_INPUT"}'
 
 
 def _reject_constant(name):
@@ -43,14 +52,41 @@ def make_handler(engine):
             pass
 
         def log_request(self, code="-", size="-"):
-            # Only a recognised fixed route is written; any other path (it may carry
-            # arbitrary client text) is replaced by a fixed marker.
+            # The request line is never written. A line is: method (GET or POST only, else the
+            # fixed marker), route (only a recognised fixed route, else a fixed marker), status code.
+            method = self.command if self.command in ("GET", "POST") else UNKNOWN_METHOD
             path = getattr(self, "path", "").split("?", 1)[0]
-            shown = path if (self.command, path) in KNOWN_ROUTES else UNKNOWN_ROUTE
-            sys.stderr.write("%s %s %s\n" % (self.command, shown, code))
+            shown = path if (method, path) in KNOWN_ROUTES else UNKNOWN_ROUTE
+            sys.stderr.write("%s %s %s\n" % (method, shown, code))
 
         def log_error(self, fmt, *args):
             pass
+
+        # -- error replies: fixed text only, nothing from the request line --------------
+        def send_error(self, code, message=None, explain=None):
+            # Replaces the stdlib error page, whose status line and body quote the method,
+            # the request version or the request line. `message` and `explain` are ignored.
+            if code == 501:  # method other than GET / POST
+                code = 405
+            elif code not in ERROR_PHRASES:  # malformed request line, bad protocol version, ...
+                code = 400
+            body = ERROR_BODY
+            self.log_request(code)
+            self.close_connection = True
+            head = ["HTTP/1.1 %d %s" % (code, ERROR_PHRASES[code]),
+                    "Server: %s" % self.version_string(),
+                    "Date: %s" % self.date_time_string(),
+                    "Connection: close",
+                    "Content-Type: application/json; charset=utf-8",
+                    "Content-Length: %d" % len(body)]
+            self.wfile.write(("\r\n".join(head) + "\r\n\r\n").encode("latin-1") + body)
+
+        def parse_request(self):
+            ok = super().parse_request()
+            if ok and self.request_version not in ("HTTP/1.0", "HTTP/1.1"):  # incl. no version at all
+                self.send_error(400)
+                return False
+            return ok
 
         # -- helpers -----------------------------------------------------------------
         def _send(self, status, obj):
@@ -115,7 +151,7 @@ def make_handler(engine):
                 self._send(200, fn(self._read_json()))
             except RequestError:
                 self._send(400, {"error": "INVALID_INPUT"})
-            except Exception as exc:  # never echo request content
+            except Exception as exc:  # only the exception type name is logged, the reply is a fixed code
                 sys.stderr.write("internal error: %s\n" % type(exc).__name__)
                 self._send(500, {"error": "INTERNAL"})
 
