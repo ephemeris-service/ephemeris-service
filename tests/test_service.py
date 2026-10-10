@@ -263,17 +263,64 @@ class Privacy(unittest.TestCase):
                 run.get("/v9/2451545.123/12.3456/78.9012?jd=2451545.123&lat=12.3456&lon=78.9012")
                 run.get("/v1/compute?lat=12.3456&lon=78.9012&jd=2451545.123")
                 run.get("/health?lat=12.3456")
-                # last on this connection: the 404 reply does not read the request body
                 run.post("/x/2459580.25/lat/12.3456/lon/78.9012?t=2459580.25", {"times": [2459580.25]})
+                run.get("/health")
             finally:
                 run.close()
         lines = buf.getvalue().strip().splitlines()
-        # the unread body of the last request may be taken for one more (malformed) request
-        self.assertEqual(lines[:4], ["GET <unknown> 404", "GET <unknown> 404", "GET /health 200", "POST <unknown> 404"])
-        for line in lines:
-            self.assertRegex(line, r"^(GET|POST|None) (/health|<unknown>) \d{3}$")
+        self.assertEqual(lines, ["GET <unknown> 404", "GET <unknown> 404", "GET /health 200",
+                                 "POST <unknown> 404", "GET /health 200"])
         for secret in ("2451545", "2459580", "12.3456", "78.9012", "v9", "/x/", "lat", "lon"):
             self.assertNotIn(secret, "\n".join(lines))
+
+    def _raw(self, run, method, path, body=None, headers=None):
+        data = None if body is None else (body if isinstance(body, bytes) else json.dumps(body).encode("utf-8"))
+        h = {"Content-Type": "application/json"}
+        h.update(headers or {})
+        run.conn.request(method, path, body=data, headers=h)
+        r = run.conn.getresponse()
+        return r.status, r.read()
+
+    def test_body_is_consumed_on_error_paths_keepalive_stays_framed(self):
+        eng = Engine(EPHE)
+        good = req([2451545.0, 2459580.25], place=(12.3456, 78.9012))
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            run = Running(eng)
+            try:
+                alone = self._raw(run, "POST", "/v1/compute", good)
+                self.assertEqual(alone[0], 200)
+                unknown = {"times": [2459580.25], "lat": 12.3456, "lon": 78.9012}
+                # each error path first, then the normal request on the SAME connection
+                for method, path, body in (("POST", "/no/such/path?x=1", unknown),
+                                           ("GET", "/no/such/path", unknown),
+                                           ("GET", "/health", unknown),
+                                           ("POST", "/v1/compute", b"{not json"),
+                                           ("POST", "/v1/compute", {"times": "x"}),
+                                           ("POST", "/v1/julday", {"year": "x"})):
+                    status, _ = self._raw(run, method, path, body)
+                    self.assertIn(status, (200, 400, 404))
+                    after = self._raw(run, "POST", "/v1/compute", good)
+                    self.assertEqual(after, alone)  # status and every byte of the body
+            finally:
+                run.close()
+
+    def test_unframed_body_closes_connection(self):
+        eng = Engine(EPHE)
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            run = Running(eng)
+            try:
+                run.conn.putrequest("POST", "/v1/compute")
+                run.conn.putheader("Content-Length", "abc")
+                run.conn.endheaders()
+                r = run.conn.getresponse()
+                body = r.read()
+                self.assertEqual(r.status, 400)
+                self.assertEqual(r.getheader("Connection"), "close")
+                self.assertIn(b"INVALID_INPUT", body)
+            finally:
+                run.close()
 
     def test_engine_keeps_no_request_state(self):
         eng = Engine(EPHE)

@@ -58,24 +58,43 @@ def make_handler(engine):
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            if self.close_connection:
+                self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(body)
 
-        def _read_json(self):
+        def _take_body(self):
+            """Consume the request body (by Content-Length) before any reply, on every route, so a
+            kept-alive connection stays correctly framed. A body that cannot be framed (no or bad
+            Content-Length, or larger than MAX_BODY_BYTES) is not read; the connection is closed
+            after the reply instead."""
+            self._raw = None
+            if self.headers.get("Transfer-Encoding") is not None:
+                self.close_connection = True
+                return
+            h = self.headers.get("Content-Length")
+            if h is None:
+                return
             try:
-                n = int(self.headers.get("Content-Length", ""))
+                n = int(h)
             except ValueError:
-                raise RequestError("Content-Length required")
+                n = -1
             if n < 0 or n > MAX_BODY_BYTES:
-                raise RequestError("body too large")
-            raw = self.rfile.read(n)
+                self.close_connection = True
+                return
+            self._raw = self.rfile.read(n)
+
+        def _read_json(self):
+            if self._raw is None:
+                raise RequestError("Content-Length required or body too large")
             try:
-                return json.loads(raw.decode("utf-8"), parse_constant=_reject_constant)
+                return json.loads(self._raw.decode("utf-8"), parse_constant=_reject_constant)
             except (UnicodeDecodeError, ValueError):
                 raise RequestError("body is not valid JSON")
 
         # -- routes ------------------------------------------------------------------
         def do_GET(self):
+            self._take_body()
             path = self.path.split("?", 1)[0]
             if path == "/health":
                 self._send(200, {"status": "ok"})
@@ -85,6 +104,7 @@ def make_handler(engine):
                 self._send(404, {"error": "NOT_FOUND"})
 
         def do_POST(self):
+            self._take_body()
             path = self.path.split("?", 1)[0]
             routes = {"/v1/compute": engine.compute, "/v1/julday": engine.julday, "/v1/revjul": engine.revjul}
             fn = routes.get(path)
