@@ -10,8 +10,9 @@ Endpoints
 
 Privacy rules (nothing here knows why a number is asked for):
   * request bodies and results are never stored;
-  * the access log records method, path and status only: no body, no times,
-    no coordinates, no client address.
+  * the access log records method, route and status only: no body, no times,
+    no coordinates, no client address; a path that is not one of the routes above
+    (and any query string) is never logged, it appears as the fixed marker <unknown>.
 """
 
 import json
@@ -21,6 +22,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .core import API_VERSION, RequestError
 
 MAX_BODY_BYTES = 16 * 1024 * 1024
+
+KNOWN_ROUTES = {("GET", "/health"), ("GET", "/version"),
+                ("POST", "/v1/compute"), ("POST", "/v1/julday"), ("POST", "/v1/revjul")}
+UNKNOWN_ROUTE = "<unknown>"
 
 
 def _reject_constant(name):
@@ -38,7 +43,11 @@ def make_handler(engine):
             pass
 
         def log_request(self, code="-", size="-"):
-            sys.stderr.write("%s %s %s\n" % (self.command, self.path.split("?", 1)[0], code))
+            # Only a recognised fixed route is written; any other path (it may carry
+            # arbitrary client text) is replaced by a fixed marker.
+            path = getattr(self, "path", "").split("?", 1)[0]
+            shown = path if (self.command, path) in KNOWN_ROUTES else UNKNOWN_ROUTE
+            sys.stderr.write("%s %s %s\n" % (self.command, shown, code))
 
         def log_error(self, fmt, *args):
             pass

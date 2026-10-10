@@ -254,6 +254,27 @@ class Privacy(unittest.TestCase):
         for line in log.strip().splitlines():
             self.assertRegex(line, r"^(GET|POST) /\S* \d{3}$")
 
+    def test_unknown_paths_are_logged_as_fixed_marker(self):
+        eng = Engine(EPHE)
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            run = Running(eng)
+            try:
+                run.get("/v9/2451545.123/12.3456/78.9012?jd=2451545.123&lat=12.3456&lon=78.9012")
+                run.get("/v1/compute?lat=12.3456&lon=78.9012&jd=2451545.123")
+                run.get("/health?lat=12.3456")
+                # last on this connection: the 404 reply does not read the request body
+                run.post("/x/2459580.25/lat/12.3456/lon/78.9012?t=2459580.25", {"times": [2459580.25]})
+            finally:
+                run.close()
+        lines = buf.getvalue().strip().splitlines()
+        # the unread body of the last request may be taken for one more (malformed) request
+        self.assertEqual(lines[:4], ["GET <unknown> 404", "GET <unknown> 404", "GET /health 200", "POST <unknown> 404"])
+        for line in lines:
+            self.assertRegex(line, r"^(GET|POST|None) (/health|<unknown>) \d{3}$")
+        for secret in ("2451545", "2459580", "12.3456", "78.9012", "v9", "/x/", "lat", "lon"):
+            self.assertNotIn(secret, "\n".join(lines))
+
     def test_engine_keeps_no_request_state(self):
         eng = Engine(EPHE)
         before = dict(vars(eng))

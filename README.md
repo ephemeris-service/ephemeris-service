@@ -57,8 +57,8 @@ between calendar dates and JD only.
 
 ## Privacy
 
-Request bodies and results are never stored. The access log holds method, path and status only: no body,
-no instants, no coordinates, no client address. Unknown request fields are rejected.
+Request bodies and results are never stored. The access log holds method, route and status only (a path that is not one of the
+fixed routes is logged as `<unknown>`): no body, no instants, no coordinates, no client address. Unknown request fields are rejected.
 
 ## Test
 
