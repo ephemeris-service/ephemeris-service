@@ -151,6 +151,9 @@ def make_handler(engine):
                 self._send(200, fn(self._read_json()))
             except RequestError:
                 self._send(400, {"error": "INVALID_INPUT"})
+            except ConnectionError as exc:  # the client went away; not an internal error, no 500 line
+                sys.stderr.write("connection error: %s\n" % type(exc).__name__)
+                self.close_connection = True
             except Exception as exc:  # only the exception type name is logged, the reply is a fixed code
                 sys.stderr.write("internal error: %s\n" % type(exc).__name__)
                 self._send(500, {"error": "INTERNAL"})

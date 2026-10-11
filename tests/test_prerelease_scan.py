@@ -12,8 +12,10 @@ import prerelease_scan as ps  # noqa: E402
 
 
 def run_scan(*args):
+    # the child writes UTF-8 whatever the console code page is, and the output is decoded as UTF-8
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
     return subprocess.run([sys.executable, "tools/prerelease_scan.py", *args], cwd=REPO, capture_output=True,
-                          text=True, encoding="utf-8")
+                          text=True, encoding="utf-8", env=env)
 
 
 class PrereleaseScan(unittest.TestCase):

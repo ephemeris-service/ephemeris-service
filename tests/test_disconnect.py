@@ -14,7 +14,7 @@ from ephemeris_service.core import Engine
 from tests.common import ALL_BODIES, EPHE, FLAGS, Running
 
 LOG_LINE = re.compile(r"^((GET|POST|<method>) (/health|/version|/v1/compute|/v1/julday|/v1/revjul|<unknown>) \d{3}"
-                      r"|connection error: \w+|internal error: \w+)$")
+                      r"|connection error: \w+)$")
 
 
 def abort_after_send(port, raw):
