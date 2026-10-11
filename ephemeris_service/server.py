@@ -158,7 +158,15 @@ def make_handler(engine):
     return Handler
 
 
+class _Server(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        # Replaces the stdlib report, which prints the client address and a traceback.
+        # Only the exception type name is written; nothing else.
+        exc = sys.exc_info()[1]
+        sys.stderr.write("connection error: %s\n" % type(exc).__name__)
+
+
 def make_server(engine, host="127.0.0.1", port=0):
-    srv = ThreadingHTTPServer((host, port), make_handler(engine))
+    srv = _Server((host, port), make_handler(engine))
     srv.daemon_threads = True
     return srv
