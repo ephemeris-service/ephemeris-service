@@ -186,10 +186,16 @@ class Engine:
         results = []
         with self._lock:
             self.swe.set_ephe_path(self.ephe_dir)
-            files_ok = all(os.path.isfile(os.path.join(self.ephe_dir, n)) for n in EPHE_SHA256)
-            for t in times:
-                results.append(self._one_time(t, bodies, flags, want_speed, files_ok,
-                                              want_houses, houses_bad, lat, lon))
+            try:
+                files_ok = all(os.path.isfile(os.path.join(self.ephe_dir, n)) for n in EPHE_SHA256)
+                for t in times:
+                    results.append(self._one_time(t, bodies, flags, want_speed, files_ok,
+                                                  want_houses, houses_bad, lat, lon))
+            finally:
+                # Swiss Ephemeris keeps its open ephemeris files per thread and the server
+                # runs one thread per connection; close them here (still under the lock) so
+                # a finished connection thread does not leak file handles.
+                self.swe.close()
         return {"api_version": API_VERSION, "ephemeris": self._info, "results": results}
 
     def _one_time(self, t, bodies, flags, want_speed, files_ok, want_houses, houses_bad, lat, lon):
